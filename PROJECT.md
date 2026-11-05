@@ -16,7 +16,7 @@ A simple photo storage and gallery application built with ASP.NET Core Razor Pag
 
 ## Prerequisites
 
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) or later
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or later
 - SQL Server LocalDB (installed with Visual Studio or SQL Server Express)
 - A modern web browser
 

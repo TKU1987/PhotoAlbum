@@ -75,11 +75,11 @@ echo -e "${YELLOW}Building and pushing Docker image...${NC}"
 if [ ! -f "Dockerfile" ]; then
   echo -e "${YELLOW}Creating Dockerfile...${NC}"
   cat > Dockerfile << 'EOF'
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 WORKDIR /app
 EXPOSE 8080
 
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY ["PhotoAlbum/PhotoAlbum.csproj", "PhotoAlbum/"]
 RUN dotnet restore "PhotoAlbum/PhotoAlbum.csproj"
