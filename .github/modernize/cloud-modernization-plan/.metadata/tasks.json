@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Tasks for the PhotoAlbum cloud readiness and Azure Container Apps plan.",
+  "tasks": [
+    {
+      "type": "setupBaseline",
+      "id": "001-setupBaseline",
+      "description": "Capture a baseline for verifying PhotoAlbum after its cloud-readiness changes.",
+      "requirements": "Set snapshotFolder to PhotoAlbum, relative to the project root. Snapshot that source directory and operate only on the snapshot while preparing the frozen test specification, test data, and infrastructure decision table for post-migration verification. No dependencies.",
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "infrastructure",
+      "id": "002-infrastructure",
+      "description": "Update and provision the Azure resources required to run PhotoAlbum.",
+      "requirements": "Use the existing Bicep infrastructure as a base and provision the Container Apps environment and app, Azure Container Registry, Azure SQL Database, Blob Storage, Azure App Configuration, and Log Analytics in the existing user-designated resource group. Do not create a resource group. Use a system-assigned managed identity and grant it required data-plane access. Keep provisioning credentials out of source control, disable unnecessary registry admin authentication, and disable public Blob access. Target subscription, location, and resource-group details are recorded in infra/infra-config.md.",
+      "iacType": "bicep",
+      "provision": true,
+      "skills": [
+        {
+          "name": "infrastructure-bicep-generation",
+          "location": "builtin"
+        }
+      ]
+    },
+    {
+      "type": "transform",
+      "id": "003-transform-photo-storage",
+      "description": "Persist uploaded photos in Azure Blob Storage instead of the container's local filesystem.",
+      "reason": "Local container files are not durable across container replacement or scaling.",
+      "requirements": "Replace local filesystem photo upload, retrieval, deletion, and rollback operations with Azure Blob Storage operations while preserving the gallery's photo behavior and metadata. Authenticate to Storage with the Container App's managed identity and keep the photos container private. Addresses the verified local or network I/O cloud-readiness issue.",
+      "dependencies": [],
+      "skills": [
+        {
+          "name": "migration-azure-storage-blob",
+          "location": "builtin"
+        }
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "transform",
+      "id": "004-transform-azure-sql",
+      "description": "Replace LocalDB configuration with Azure SQL Database connectivity.",
+      "reason": "The application's current database configuration is local-only and cannot be used by the cloud deployment.",
+      "requirements": "Configure the application to use the provisioned Azure SQL Database with managed identity authentication. Remove obsolete LocalDB connection configuration from application settings and Web.config while retaining local development and test support. Addresses the verified connection-string and SQL database cloud-readiness issues.",
+      "dependencies": [
+        "003-transform-photo-storage"
+      ],
+      "skills": [
+        {
+          "name": "migration-azure-sql-database",
+          "location": "builtin"
+        }
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "transform",
+      "id": "005-transform-app-configuration",
+      "description": "Externalize non-secret application settings for the Azure deployment.",
+      "reason": "Local appsettings files currently hold application configuration that should be centrally managed in Azure.",
+      "requirements": "Move non-secret runtime settings currently in appsettings.json to Azure App Configuration and load them through the application's configuration system using managed identity. Keep secrets out of appsettings and source control; provide required runtime secrets through protected deployment configuration. Addresses the verified local application configuration cloud-readiness issue.",
+      "dependencies": [
+        "004-transform-azure-sql"
+      ],
+      "skills": [
+        {
+          "name": "migration-local-appsettings-azure-app-configuration",
+          "location": "builtin"
+        }
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "integrationTest",
+      "id": "006-integrationTest",
+      "description": "Build integration tests for migrated Azure services and run post-migration verification",
+      "requirements": "Verify the deployed application against the provisioned Azure SQL Database, Blob Storage, and Azure App Configuration using the real-resource strategy selected for the baseline. Validate upload, retrieval, and deletion behavior along with database persistence. Obtain resource information from infra/infra-config.md; do not copy resource IDs, subscription IDs, or connection strings into this task.",
+      "dependencies": [
+        "001-setupBaseline",
+        "002-infrastructure",
+        "003-transform-photo-storage",
+        "004-transform-azure-sql",
+        "005-transform-app-configuration"
+      ]
+    },
+    {
+      "type": "security",
+      "id": "007-security",
+      "description": "Scan PhotoAlbum dependencies for known vulnerabilities and remediate findings before deployment.",
+      "requirements": "Scan all current project dependencies for known CVEs and remediate identified vulnerabilities to the minimum patched versions. Do not repeat prior runtime-upgrade recommendations. Verify the project builds and its tests pass after remediation.",
+      "dependencies": [
+        "003-transform-photo-storage",
+        "004-transform-azure-sql",
+        "005-transform-app-configuration",
+        "006-integrationTest"
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "deployment",
+      "id": "008-deployment-azure-container-apps",
+      "description": "Containerize and deploy PhotoAlbum to Azure Container Apps.",
+      "requirements": "Build and deploy the current .NET 10 application to Azure Container Apps using the provisioned resources in the existing user-designated resource group. Configure the app to use its managed identity for Azure services and protected deployment configuration for runtime secrets. Do not create a resource group.",
+      "dependencies": [
+        "002-infrastructure",
+        "006-integrationTest",
+        "007-security"
+      ],
+      "targetAzureService": "azurecontainerapp",
+      "resourceStatus": "Provision through the infrastructure task in the existing resource group.",
+      "deploymentTool": "bicep",
+      "skills": [
+        {
+          "name": "azcli-containerapp-deploy",
+          "location": "builtin"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "planName": "cloud-modernization-plan",
+    "projectName": "PhotoAlbum",
+    "language": "dotnet",
+    "createdAt": "2026-11-05T14:29:00+01:00",
+    "version": "1.0"
+  }
+}
